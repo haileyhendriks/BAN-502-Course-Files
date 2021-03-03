@@ -1,0 +1,75 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## R and RStudio Refresher Assignment
+### Hailey Hendriks
+
+### Task 1
+```{r}
+#install.packages(tidyverse)
+#install.packages(esquisse)
+library(tidyverse)
+library(esquisse)
+```
+
+### Task 2
+```{r}
+diamonddata = diamonds
+#str(diamonddata)
+```
+
+### Task 3
+```{r}
+ggplot(diamonddata,aes(x=carat,y=price)) +
+  geom_point()
+```
+As carat size increases, price increases.
+
+### Task 4
+```{r}
+ggplot(diamonddata,aes(x=carat,y=price,color=cut)) +
+  geom_point()
+```
+As carat size increases, price increases. The better the cut, the smaller the carat size and the more expensive.
+
+### Task 5
+```{r}
+ggplot(diamonddata,aes(x=carat,y=price,color=cut,)) +
+  geom_point() +
+  facet_wrap(~color)
+```
+The worse cut diamonds show up more in the worse colors and at lower prices per carat. The nicer color the diamond, the more expensive and it usually has a better cut.
+
+### Task 6
+```{r}
+inventory <- read_csv("InventoryData.csv")
+#str(inventory)
+#summary(inventory)
+```
+
+### Task 7
+```{r}
+inventoryA <- inventory %>%
+  filter(Supplier=="A")
+#str(inventoryA)
+```
+This new data frame has 3,695 rows.
+
+### Task 8
+```{r}
+inventoryA =mutate(inventoryA, OnHandRatio =`On Hand`/`Annual Demand`)
+#summary(inventoryA)
+```
+This line of code created a new column called OnHandRadio that divided the On Hand variable by the Annual Demand variable.
+
+### Task 9
+```{r}
+avg_cost <- inventoryA  %>%
+  group_by(`Item SKU`) %>%
+  summarize(SKUAvgCost = mean(`Cost per Unit ($)`))
+```
+
+### Task 10
+There were no specific topics I found challenging, I just found the syntax to be challenging at times and very tedious. 

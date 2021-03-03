@@ -1,0 +1,159 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# Cluster Assignment
+## Hailey Hendriks
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+```
+
+```{r}
+trucks <- read_csv("trucks.csv")
+```
+
+### Task 1
+```{r}
+ggplot(trucks,aes(Distance, Speeding)) + geom_point()
+```
+
+There does seem to be natural clustering for speeding. This appears when the distance is between 25 to 75, and again when the distance is between 150 to 225. 
+
+### Task 2
+```{r}
+kmeans_recipe = recipe(~ Speeding + Distance, trucks)
+
+trucks_dummy = kmeans_recipe %>%
+  step_scale(all_numeric()) %>%
+  step_center(all_numeric())
+
+trucks_dummy = prep(trucks_dummy, trucks)
+
+trucks_cleaned = bake(trucks_dummy, trucks)
+```
+
+### Task 3
+```{r}
+set.seed(64)
+clusts = 
+  tibble(k = 2) %>% 
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts
+```
+
+```{r}
+clusters =
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p1 = ggplot(assignments, aes(x=Distance,y=Speeding)) + 
+  geom_point(aes(color=.cluster), alpha=0.8) +
+  facet_wrap(~ k)
+p1
+```
+
+The clusters are distributed between 1 and 2 with no outliers.
+
+### Task 4
+```{r}
+set.seed(412)
+clusts2 = 
+  tibble(k = 1:8) %>% 
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts2
+```
+
+```{r}
+clusters2 =
+  clusts2 %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts2 %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts2 %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p2 = ggplot(assignments, aes(x=Distance,y=Speeding)) + 
+  geom_point(aes(color=.cluster), alpha=0.8) +
+  facet_wrap(~ k)
+p2
+```
+K values 2 or 4 seem to be most appropriate for this data. Any other k value does not seem appropriate, as the splits do not fit correctly with the data.
+
+### Task 5
+```{r}
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point() + theme_bw()
+```
+
+The value of k that seems to be the best is 4 because this is where the bend is at.
+
+### Task 6
+```{r}
+set.seed(64)
+clusts = 
+  tibble(k = 4) %>% 
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts
+```
+
+```{r}
+clusters =
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+```
+
+```{r}
+p1 = ggplot(assignments, aes(x=Distance,y=Speeding)) + 
+  geom_point(aes(color=.cluster), alpha=0.8) +
+  facet_wrap(~ k)
+p1
+```
+
+This k value seems to be the best for this data. It created 4 clear groups without any outliers or unclear data.
+

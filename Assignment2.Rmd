@@ -1,0 +1,227 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# Module 3 Assignment 2
+## Hailey Hendriks
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+```
+
+```{r}
+parole <- read_csv("parole.csv")
+summary(parole)
+```
+
+```{r}
+parole = parole %>% mutate(male=as_factor(male)) %>% 
+  mutate(male=fct_recode(male,"male"="1","female"="0"))
+parole = parole %>% mutate(race=as_factor(race)) %>% 
+  mutate(race=fct_recode(race,"white"="1","other"="2"))
+parole = parole %>% mutate(state=as_factor(state)) %>% 
+  mutate(state=fct_recode(state,"Kentucky"="2","Louisiana"="3","Virginia"="4","Other"="1"))
+parole = parole %>% mutate(crime=as_factor(crime)) %>% 
+  mutate(crime=fct_recode(crime,"larceny"="2","drug"="3","driving"="4","Other"="1"))
+parole = parole %>% mutate(multiple.offenses=as_factor(multiple.offenses)) %>% 
+  mutate(multiple.offenses=fct_recode(multiple.offenses,"multiple offenses"="1","other"="0"))
+parole = parole %>% mutate(violator=as_factor(violator)) %>% 
+  mutate(violator=fct_recode(violator,"parole violated"="1","non-violated"="0"))
+```
+
+## Task 1
+```{r}
+set.seed(12345)
+parole_split = initial_split(parole, prob = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+## Task 2
+```{r}
+ggplot(train, aes(x=violator, fill = male)) + geom_bar(position="fill") + theme_bw()
+t1 = table(train$violator, train$male) 
+prop.table(t1, margin = 2 )
+
+ggplot(train, aes(x=violator, fill = race)) + geom_bar(position="fill") + theme_bw()
+t2 = table(train$violator, train$race) 
+prop.table(t2, margin = 2 )
+
+ggplot(train, aes(x=violator, fill = state)) + geom_bar(position="fill") + theme_bw()
+t3 = table(train$violator, train$state) 
+prop.table(t3, margin = 2 )
+
+ggplot(train, aes(x=violator, fill = multiple.offenses)) + geom_bar(position="fill") + theme_bw()
+t4 = table(train$violator, train$multiple.offenses) 
+prop.table(t4, margin = 2 )
+
+ggplot(train, aes(x=violator, fill = crime)) + geom_bar(position="fill") + theme_bw()
+t5 = table(train$violator, train$crime) 
+prop.table(t5, margin = 2 )
+```
+According to these graphs and tables, state, multiple offenses, and race seemed to predict whether the person violated their parole or not. The graphs showed this most clearly to me, but the table was also helpful. I chose the variables that had the most differences between the fill variables.
+
+## Task 3
+```{r}
+parole_model = 
+  logistic_reg() %>% 
+  set_engine("glm") 
+
+parole_recipe = recipe(violator ~ state, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())   
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, train)
+```
+```{r}
+summary(parole_fit$fit$fit$fit)
+```
+The AIC of the model is 308.7. Both Louisiana and Virginia have significant p-values, but Kentucky does not seem to be significant. It also shows that people in Louisiana are more likely to violate their parole due to the coefficient of 1.41.
+
+## Task 4
+```{r}
+parole_model = 
+  logistic_reg() %>% 
+  set_engine("glm") 
+
+parole_recipe = recipe(violator ~ ., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())   
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit2 = fit(logreg_wf, train)
+options(scipen=999)
+```
+```{r}
+summary(parole_fit2$fit$fit$fit)
+```
+The AIC of this model is 300.08, which is slightly better than the previous model. This model shows that multiple.offenses and state are the most significant variables. 
+
+## Task 5
+```{r}
+parole_model = 
+  logistic_reg() %>% 
+  set_engine("glm") 
+
+parole_recipe = recipe(violator ~ state+multiple.offenses+race, train) %>%
+  step_dummy(all_nominal(), -all_outcomes())   
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit3 = fit(logreg_wf, train)
+```
+```{r}
+summary(parole_fit3$fit$fit$fit)
+```
+
+The AOC of this model is 289.99, which is better than previous  models. It shows that Virginia and multiple offenses are most significant with low p-values.
+
+## Task 6
+```{r}
+newdata1 = data.frame(state="Louisiana",multiple.offenses="multiple offenses",race="white")
+predict(parole_fit3,newdata1,type="prob")
+```
+The predicted probability of parole violation from parolee1 is 44%.
+
+```{r}
+newdata2 = data.frame(state="Kentucky",multiple.offenses="other",race="other")
+predict(parole_fit3,newdata2,type="prob")
+```
+
+The predicted probability of parole violation from parolee2 is 15%.
+
+### Task 7
+```{r}
+predictions=predict(parole_fit2, train, type="prob")
+head(predictions)
+```
+```{r}
+predictions=predict(parole_fit2,train,type="prob")[2]
+head(predictions)
+```
+
+```{r}
+ROCRpred=prediction(predictions,train$violator)
+ROCRperf=performance(ROCRpred,"tpr","fpr")
+plot(ROCRperf,colorize=TRUE,print.cutoffs.at=seq(0,1,by=0.1),
+     text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred,"auc")@y.values)
+opt.cut=function(perf,pred){
+  cut.ind=mapply(FUN=function(x,y,p){
+  d=(x-0)^2+(y-1)^2
+  ind=which(d==min(d))
+  c(sensitivity=y[[ind]],specificity=1-x[[ind]],
+    cutoff=p[[ind]])
+  }, perf@x.values,perf@y.values,pred@cutoffs)
+}
+print(opt.cut(ROCRperf,ROCRpred))
+```
+
+### Task 8
+```{r}
+accur=table(train$violator,predictions>0.1258245)
+accur
+(accur[1,1]+accur[2,2])/nrow(train)
+```
+The accuracy is 80.4, the sensitivity is 76.2%, and the specificity is 81.2%. Incorrectly classifying a parolee could cause them to reenter society and have a longer parole than they were meant to. This situation is similar to a healthcare situation.
+
+### Task 9 
+```{r}
+accur=table(train$violator,predictions>0.4)
+accur
+(accur[1,1]+accur[2,2])/nrow(train)
+```
+
+```{r}
+accur=table(train$violator,predictions>0.6)
+accur
+(accur[1,1]+accur[2,2])/nrow(train)
+```
+
+```{r}
+accur=table(train$violator,predictions>0.5)
+accur
+(accur[1,1]+accur[2,2])/nrow(train)
+```
+
+The 0.5 value best maximizes accuracy on the training set.
+
+### Task 10
+```{r}
+predictions=predict(parole_fit3,test,type="prob")[2]
+ROCRpred=prediction(predictions,test$violator)
+ROCRperf=performance(ROCRpred,"tpr","fpr")
+plot(ROCRperf,colorize=TRUE,print.cutoffs.at=seq(0.1,by=0.1),text.adj=c(-0.2,1.7))
+```
+
+```{r}
+opt.cut =function(perf, pred){    
+  cut.ind =mapply(FUN=function(x, y, p){        
+  d =(x -0)^2+(y-1)^2        
+  ind =which(d ==min(d))
+  c(sensitivity = y[[ind]], specificity =1-x[[ind]], 
+    cutoff = p[[ind]])    
+  }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+t6=table(test$violator,predictions>0.5)
+t6
+(t6[1,1]+t6[2,2])/nrow(test)
+```
+

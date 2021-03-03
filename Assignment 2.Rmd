@@ -1,0 +1,150 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+## Module 2 Assignment 2
+### Hailey Hendriks
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(GGally)
+library(ggcorrplot)
+library(MASS)
+library(car)
+library(lubridate)
+library(lmtest)
+```
+
+
+### Task 1
+```{r}
+bike = read_csv("bike_cleaned.csv")
+summary(bike)
+```
+
+```{r}
+bike = bike %>% mutate(dteday = mdy(dteday))
+bike = bike %>% mutate_if(is_character,as_factor)
+bike = bike %>% mutate(hr=as_factor(hr))
+```
+The "hr" variable is converted into a factor because it is categorical data and does not need to be used as a number to be calculated.
+
+### Task 2
+```{r}
+ggpairs(bike,columns=c(1,10,11,12,13,16))
+```   
+Temperature is best correlated with count.
+
+### Task 3
+```{r}
+ggplot(bike, aes(x=hr,y=count)) + geom_boxplot() + theme_bw() 
+ggplot(bike,aes(x=season,y=count))+ geom_boxplot() + theme_bw() 
+ggplot(bike, aes(x=mnth,y=count)) + geom_boxplot() + theme_bw() 
+ggplot(bike, aes(x=holiday,y=count)) + geom_boxplot() + theme_bw() 
+ggplot(bike, aes(x=weekday,y=count)) + geom_boxplot() + theme_bw() 
+ggplot(bike, aes(x=workingday,y=count)) + geom_boxplot() + theme_bw() 
+ggplot(bike, aes(x=weathersit,y=count)) + geom_boxplot() + theme_bw() 
+```
+Hour seems to affect count significantly because there are obvious times when people are not likely to be using bikes, such as late at night, and times when people are verly likely to be using bikes such as commuting to work at 7am.
+Season seems to affect count because less people are likely to use bikes in colder weather such as winter. Similarly, month affects count.
+Holiday does not seem to affect count too much, the averages are about the same on holiday vs notholiday, with more outliers during days that are not holidays.
+Weekday does not seem to affect count too much. All averages are about the same, the only noticeable difference is that usage goes down on the weekends.
+Workingday does not seem to affect count too much. I would assume this is because some people bike to work, but a lot of people also enjoy biking on weekends.
+Weathersit seems to affect count. This one is obvious to me because nobody wants to ride a bike in the pouring rain.
+
+### Task 4
+```{r}
+bike_recipe = recipe(count ~ hr, bike)
+
+bikelm_model = 
+  linear_reg() %>%
+  set_engine("lm")
+
+bikelm_wflow =
+  workflow() %>% 
+  add_model(bikelm_model) %>% 
+  add_recipe(bike_recipe)
+
+bikelm_fit = fit(bikelm_wflow, bike)
+```
+```{r}
+summary(bikelm_fit$fit$fit$fit)
+```
+This seems to be a decent model, the adjusted R-squared value is 0.5008, and p-value is 2.2e-16, which is good. Each hour shows significance.
+
+### Task 5
+```{r}
+bike2 = bike %>% dplyr::select("season","mnth","hr","holiday","weekday","workingday","weathersit","temp","atemp","hum","windspeed","count")
+summary(bike2)
+```
+
+```{r}
+bike2_recipe = recipe(count ~ ., bike2) %>% 
+  step_other(hr,weathersit, threshold = 0.01) %>%
+  step_dummy(all_nominal()) %>%
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors()) 
+  
+ridge_model = 
+  linear_reg(mixture = 0) %>%
+  set_engine("glmnet") 
+
+bikeridge_wflow = 
+  workflow() %>% 
+  add_model(ridge_model) %>% 
+  add_recipe(bike2_recipe)
+
+bikeridge_fit = fit(bikeridge_wflow, bike)
+```
+```{r}
+bikeridge_fit
+```
+
+```{r}
+plot(bikeridge_fit$fit$fit$fit$lambda,bikeridge_fit$fit$fit$fit$dev.ratio)
+```
+
+```{r}
+bikeridge_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")
+```
+
+```{r}
+bikeridge_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit") %>%
+  coef(s=14)
+```
+
+The ridge method gave me a R-squared value of .6216, which is better than the previous model R-squared value of .5008
+
+
+### Task 6
+```{r}
+lasso_model = 
+  linear_reg(mixture = 1) %>% 
+  set_engine("glmnet")  
+
+lasso_wflow = 
+  workflow() %>% 
+  add_model(lasso_model) %>% 
+  add_recipe(bike2_recipe)
+
+lasso_fit = fit(lasso_wflow, bike2)
+```
+```{r}
+lasso_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  
+```
+```{r}
+lasso_fit %>%
+  pull_workflow_fit() %>%
+  pluck("fit")  %>% 
+  coef(s = .701)
+```
+The lasso model yeilds the highest R-squared value of .6294, but this is subjective to which lambda value is chosen. The lasso model drops some variables such as Wednesday, Thursday, April, August, November, December, workingday, and hour 6.
